@@ -113,6 +113,67 @@ def build_faker_pools(seed: int = 42) -> dict:
     }
 
 
+def build_order_record(
+    rng: random.Random,
+    pools: dict,
+    store_ids: list[str],
+    last_order_id: str | None = None,
+    event_timestamp: str | None = None,
+) -> dict:
+    """
+    Construye UN evento de orden con el esquema del proyecto.
+
+    Es la única fuente de verdad del "shape" del registro: la usan tanto el
+    generador batch (Parte I, archivos .jsonl) como el productor de Kafka
+    (Parte II, un mensaje JSON por evento).
+
+    - `last_order_id`: si se pasa, ~0.5% de las veces se repite (duplicado intencional).
+    - `event_timestamp`: si se pasa, reemplaza al timestamp histórico del pool
+      (el productor de streaming usa la hora actual).
+    """
+    customers = pools["customers"]
+    cities = pools["cities"]
+    notes = pools["notes"]
+    timestamps = pools["timestamps"]
+
+    cust_id, cust_name, cust_email, cust_age = rng.choice(customers)
+
+    # Inyectar ~0.5% de duplicados y ~0.5% de precios negativos para Data Cleaning
+    if last_order_id and rng.random() < 0.005:
+        order_id = last_order_id
+    else:
+        order_id = str(uuid.UUID(int=rng.getrandbits(128), version=4))
+
+    city = None if rng.random() < 0.02 else f"  {rng.choice(cities)}  " if rng.random() < 0.05 else rng.choice(cities)
+    rating = None if rng.random() < 0.04 else round(rng.uniform(1.0, 5.0), 2)
+    age = None if rng.random() < 0.03 else cust_age
+    unit_price = -round(rng.uniform(5.0, 50.0), 2) if rng.random() < 0.005 else round(rng.uniform(5.0, 850.0), 2)
+
+    historical_ts = rng.choice(timestamps)
+
+    return {
+        "order_id": order_id,
+        "event_timestamp": event_timestamp or historical_ts,
+        "customer_id": cust_id,
+        "customer_name": cust_name,
+        "customer_email": cust_email,
+        "customer_age": age,
+        "store_id": rng.choice(store_ids),
+        "city": city,
+        "country_region": rng.choice(REGIONS),
+        "product_category": rng.choice(CATEGORIES),
+        "payment_method": rng.choice(PAYMENT_METHODS),
+        "items_count": rng.randint(1, 12),
+        "unit_price": unit_price,
+        "discount_pct": round(rng.choice([0.0, 0.0, 5.0, 10.0, 15.0, 20.0]), 1),
+        "delivery_time_min": round(rng.uniform(8.0, 75.0), 1),
+        "distance_km": round(rng.uniform(0.5, 25.0), 2),
+        "customer_rating": rating,
+        "order_status": rng.choice(ORDER_STATUSES),
+        "notes": rng.choice(notes),
+    }
+
+
 def generate_part_file(args_tuple) -> tuple[str, int, int]:
     """Genera un archivo parcial .jsonl de tamaño objetivo y retorna (ruta, bytes, filas)."""
     (
@@ -126,10 +187,6 @@ def generate_part_file(args_tuple) -> tuple[str, int, int]:
     ) = args_tuple
 
     rng = random.Random(1000 + part_idx)
-    customers = pools["customers"]
-    cities = pools["cities"]
-    notes = pools["notes"]
-    timestamps = pools["timestamps"]
 
     part_name = f"orders_part_{part_idx:04d}.jsonl"
     local_path = Path(output_dir) / part_name
@@ -143,41 +200,8 @@ def generate_part_file(args_tuple) -> tuple[str, int, int]:
 
     with open(local_path, mode="w", encoding="utf-8", buffering=4 * 1024 * 1024) as f:
         while bytes_written < target_bytes:
-            cust_id, cust_name, cust_email, cust_age = rng.choice(customers)
-
-            # Inyectar ~0.5% de duplicados y ~0.5% de precios negativos para Data Cleaning
-            if last_order_id and rng.random() < 0.005:
-                order_id = last_order_id
-            else:
-                order_id = str(uuid.UUID(int=rng.getrandbits(128), version=4))
-                last_order_id = order_id
-
-            city = None if rng.random() < 0.02 else f"  {rng.choice(cities)}  " if rng.random() < 0.05 else rng.choice(cities)
-            rating = None if rng.random() < 0.04 else round(rng.uniform(1.0, 5.0), 2)
-            age = None if rng.random() < 0.03 else cust_age
-            unit_price = -round(rng.uniform(5.0, 50.0), 2) if rng.random() < 0.005 else round(rng.uniform(5.0, 850.0), 2)
-
-            record = {
-                "order_id": order_id,
-                "event_timestamp": rng.choice(timestamps),
-                "customer_id": cust_id,
-                "customer_name": cust_name,
-                "customer_email": cust_email,
-                "customer_age": age,
-                "store_id": rng.choice(store_ids),
-                "city": city,
-                "country_region": rng.choice(REGIONS),
-                "product_category": rng.choice(CATEGORIES),
-                "payment_method": rng.choice(PAYMENT_METHODS),
-                "items_count": rng.randint(1, 12),
-                "unit_price": unit_price,
-                "discount_pct": round(rng.choice([0.0, 0.0, 5.0, 10.0, 15.0, 20.0]), 1),
-                "delivery_time_min": round(rng.uniform(8.0, 75.0), 1),
-                "distance_km": round(rng.uniform(0.5, 25.0), 2),
-                "customer_rating": rating,
-                "order_status": rng.choice(ORDER_STATUSES),
-                "notes": rng.choice(notes),
-            }
+            record = build_order_record(rng, pools, store_ids, last_order_id)
+            last_order_id = record["order_id"]
 
             line = json.dumps(record, ensure_ascii=False) + "\n"
             batch_lines.append(line)

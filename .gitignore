@@ -4,3 +4,9 @@ data_sample/
 data_raw/
 .venv/
 .DS_Store
+checkpoints/
+data/
+.env
+spark-warehouse/
+metastore_db/
+derby.log
