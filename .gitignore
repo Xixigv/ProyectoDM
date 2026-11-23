@@ -10,3 +10,4 @@ data/
 spark-warehouse/
 metastore_db/
 derby.log
+docs/Part2_Report.html

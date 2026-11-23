@@ -5,10 +5,10 @@
 
 | Team member | Student ID |
 |---|---|
-| Ximena Gonzales Guerra | `<ID>` |
-| Renata Caballero Velazquez | `<ID>` |
+| Ximena Gonzales Guerra | 746199 |
+| Renata Caballero Velazquez | 741036 |
 
-Repository: `https://github.com/Xixigv/ProyectoDM` · Pull Request: `<PR link>`
+Repository: `https://github.com/Xixigv/ProyectoDM` · Pull Request: https://github.com/Xixigv/ProyectoDM/pull/1
 
 ---
 
@@ -98,7 +98,7 @@ customer → store → customer recommendations, which is out of scope.
 
 ## 2. Producer Application
 
-File: [`producer/kafka_producer.py`](../producer/kafka_producer.py) — PR: `<PR link>`
+File: [`producer/kafka_producer.py`](../producer/kafka_producer.py) — PR: https://github.com/Xixigv/ProyectoDM/pull/1
 
 **Same information as Part I.** The record-building logic of `generate_dataset.py` was refactored
 into a single function, `build_order_record()`, which is now used by **both** the batch generator
